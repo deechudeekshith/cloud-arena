@@ -1,0 +1,13 @@
+{
+  "comment": "Mirror of WeaponDB for tooling/future net experiments. Runtime source of truth is scripts/weapons/WeaponDB.gd.",
+  "weapons": [
+    {"id": 0, "key": "rifle", "name": "AR-7 Vandal", "damage": 22.0, "head_mult": 1.8, "fire_rate": 9.0, "mag": 30, "reserve": 120, "reload_time": 1.9, "spread_deg": 1.4, "recoil": 0.028, "range": 90.0, "auto": true, "pellets": 1},
+    {"id": 1, "key": "smg", "name": "VK-9 Hornet", "damage": 14.0, "head_mult": 1.6, "fire_rate": 13.0, "mag": 32, "reserve": 128, "reload_time": 1.5, "spread_deg": 2.4, "recoil": 0.018, "range": 55.0, "auto": true, "pellets": 1},
+    {"id": 2, "key": "shotgun", "name": "M500 Breacher", "damage": 9.0, "head_mult": 1.5, "fire_rate": 1.4, "mag": 6, "reserve": 30, "reload_time": 2.4, "spread_deg": 4.5, "recoil": 0.09, "range": 28.0, "auto": false, "pellets": 8}
+  ],
+  "skins": [
+    {"id": 0, "name": "Stock"},
+    {"id": 1, "name": "Desert"},
+    {"id": 2, "name": "Neon"}
+  ]
+}

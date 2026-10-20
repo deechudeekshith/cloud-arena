@@ -1,0 +1,41 @@
+; Engine configuration file.
+; Cloud Arena — Godot 4.x lightweight 3D FPS foundation.
+; NOTE: legacy 2D raylib prototype lives in ../src/ (frozen, not used).
+
+config_version=5
+
+[application]
+
+config/name="Cloud Arena"
+config/description="Lightweight 3D FPS arena. Offline 4v4 (1 human + 7 bots) testbed for future cloud/thin-client experiments."
+run/main_scene="res://scenes/main/Main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/resizable=true
+window/size/mode=0
+window/stretch/mode="disabled"
+
+[physics]
+
+3d/default_gravity=18.0
+common/physics_ticks_per_second=60
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.web="gl_compatibility"
+anti_aliasing/quality/msaa_3d=0
+anti_aliasing/quality/screen_space_aa=0
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.05, 0.07, 0.11, 1)
+limits/cluster_builder/max_clustered_elements=512
+
+[performance]
+
+run/low_processor_mode=false

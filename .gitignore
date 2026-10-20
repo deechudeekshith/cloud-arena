@@ -1,0 +1,28 @@
+# Build output
+build/
+dist/
+
+# Godot generated
+godot/.godot/
+*.translation
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Local recordings and experiment output
+monitor/*.db
+monitor/*.db-journal
+monitor/*.db-wal
+monitor/*.db-shm
+monitor/run_exp*.log
+monitor/room_exp*.txt
+*.log
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,9 @@
+{
+  "comment": "Mirror of AvatarDB for tooling. Runtime source of truth is scripts/characters/AvatarDB.gd.",
+  "avatars": [
+    {"id": 0, "name": "Scout", "accessory": "visor"},
+    {"id": 1, "name": "Trooper", "accessory": "helmet"},
+    {"id": 2, "name": "Medic", "accessory": "backpack"},
+    {"id": 3, "name": "Ghost", "accessory": "hood"}
+  ]
+}

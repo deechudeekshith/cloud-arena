@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cloud Arena — Room Monitor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- ── top bar ─────────────────────────────────────────────── -->
+<header id="topbar">
+  <div class="brand">CLOUD ARENA</div>
+  <div class="tb-item"><span class="lbl">Monitoring Server</span>
+    <span id="tb-server" class="dot off">DISCONNECTED</span></div>
+  <div class="tb-item"><span class="lbl">Game Connection</span>
+    <span id="tb-game" class="dot off">DISCONNECTED</span></div>
+  <div class="tb-item"><span class="lbl">Active Rooms</span>
+    <span id="tb-rooms" class="num">0</span></div>
+  <div class="tb-item"><span class="lbl">Connected Devices</span>
+    <span id="tb-devices" class="num">0</span></div>
+  <div class="spacer"></div>
+  <div id="tb-sim" class="hidden warn">SIMULATION MODE — NOT REAL GAME DATA</div>
+  <button id="btn-refresh" class="tb-btn">↻ Refresh</button>
+  <nav id="tabs">
+    <button data-v="rooms" class="sel">ROOMS</button>
+    <button data-v="history">SESSION HISTORY</button>
+    <button data-v="compare">COMPARE</button>
+    <button data-v="export">EXPORT</button>
+    <button data-v="settings">SETTINGS</button>
+  </nav>
+</header>
+
+<!-- ── main: rooms view ────────────────────────────────────── -->
+<main id="view-rooms" class="view sel">
+  <aside id="rooms-pane">
+    <h2>ACTIVE ROOMS <span id="rooms-count" class="dim"></span></h2>
+    <div id="rooms-list"></div>
+  </aside>
+  <section id="room-pane">
+    <div id="room-empty" class="empty">Select a room to open its session dashboard.</div>
+    <div id="room-view" class="hidden">
+      <div class="room-head">
+        <button id="btn-back" class="ghost">← Back to Rooms</button>
+        <h2 id="room-title">ROOM —</h2>
+        <span id="room-state" class="pill">—</span>
+        <span id="room-rec" class="pill rec">● RECORDING</span>
+      </div>
+      <div id="room-summary" class="kv"></div>
+      <div id="room-cards" class="cards"></div>
+      <div class="panel">
+        <h3>LIVE GRAPHS</h3>
+        <div class="row winbtns" id="winbtns">
+          <button data-w="60">1 min</button><button data-w="300" class="sel">5 min</button>
+          <button data-w="600">10 min</button><button data-w="0">Entire session</button>
+        </div>
+        <div class="grid2">
+          <div><h4>FPS</h4><canvas class="chart" id="g-fps"></canvas></div>
+          <div><h4>RTT / PING</h4><canvas class="chart" id="g-rtt"></canvas></div>
+          <div><h4>BANDWIDTH (up/down)</h4><canvas class="chart" id="g-bw"></canvas></div>
+          <div><h4>CPU / RAM (all devices)</h4><canvas class="chart" id="g-cpu"></canvas></div>
+          <div><h4>DATA TRANSFER (orig vs sent)</h4><canvas class="chart" id="g-data"></canvas></div>
+          <div><h4>PACKET LOSS</h4><canvas class="chart" id="g-loss"></canvas></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>PLAYERS / DEVICES</h3>
+        <table id="dev-table"></table>
+        <div id="dev-detail" class="devdetail hidden"></div>
+      </div>
+      <div class="two">
+        <div class="panel">
+          <h3>EXPERIMENT CONTROL</h3>
+          <div id="ctl"></div>
+          <div class="row">
+            <button id="btn-apply" class="go">APPLY</button>
+            <button id="btn-reset" class="ghost">RESET</button>
+          </div>
+          <div id="ctl-msg" class="msg"></div>
+        </div>
+        <div class="panel">
+          <h3>GAME CONTROL</h3>
+          <div class="row">
+            <button data-g="start_match">▶ START MATCH</button>
+            <button data-g="stop_match">■ STOP MATCH</button>
+            <button data-g="pause">⏸ PAUSE</button>
+          </div>
+          <div id="game-msg" class="msg"></div>
+          <h3 style="margin-top:10px">CONFIGURATION HISTORY</h3>
+          <div id="cfg-history" class="small scroll"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>SESSION EVENTS <span class="dim">pre-match + match</span></h3>
+        <div id="room-events" class="small scroll"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ── history ─────────────────────────────────────────────── -->
+<main id="view-history" class="view">
+  <h2>SESSION HISTORY</h2>
+  <p class="dim">Completed sessions stay available without the game running.</p>
+  <table id="hist-table"></table>
+  <div id="replay-box" class="panel hidden">
+    <h3>SESSION REPLAY <span class="dim">metric timeline only</span></h3>
+    <div class="row">
+      <button id="rp-play">▶ Play</button>
+      <input id="rp-pos" type="range" min="0" max="1000" value="0">
+      <span id="rp-time" class="mono dim">00:00</span>
+      <button id="rp-csv">CSV</button><button id="rp-json">JSON</button>
+    </div>
+    <canvas class="chart" id="rp-chart" style="height:260px"></canvas>
+    <div id="rp-stats" class="kv"></div>
+  </div>
+</main>
+
+<!-- ── compare ─────────────────────────────────────────────── -->
+<main id="view-compare" class="view">
+  <h2>SESSION COMPARISON</h2>
+  <p class="dim">Measured values only. No configuration is declared better.</p>
+  <div class="row">
+    <div><label class="f">Session A</label><select id="cmp-a"></select></div>
+    <div><label class="f">Session B</label><select id="cmp-b"></select></div>
+    <div><label class="f">&nbsp;</label><button id="cmp-go" class="go">COMPARE</button></div>
+  </div>
+  <div id="cmp-out"></div>
+</main>
+
+<!-- ── export ──────────────────────────────────────────────── -->
+<main id="view-export" class="view">
+  <h2>EXPORT</h2>
+  <p class="dim">Session data: room, devices, timestamps, metrics, events, config history. Offline.</p>
+  <div class="row">
+    <div><label class="f">Session</label><select id="exp-sel"></select></div>
+    <div><label class="f">&nbsp;</label><button id="exp-csv">CSV</button></div>
+    <div><label class="f">&nbsp;</label><button id="exp-json">JSON</button></div>
+  </div>
+</main>
+
+<!-- ── settings ────────────────────────────────────────────── -->
+<main id="view-settings" class="view">
+  <h2>SETTINGS</h2>
+  <div id="set-info" class="kv"></div>
+  <div class="panel"><h3>MONITORING OVERHEAD <span class="dim">separate from game traffic</span></h3>
+    <div id="set-mon" class="kv"></div></div>
+  <div class="panel"><h3>COMMAND LOG</h3><div id="cmd-log" class="small scroll"></div></div>
+</main>
+
+<div id="fatal" class="hidden"></div>
+<script src="app.js?v=10"></script>
+</body>
+</html>
