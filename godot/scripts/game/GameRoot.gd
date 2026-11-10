@@ -613,10 +613,12 @@ func _on_found_updated() -> void:
 
 # ---------------- per-frame ----------------
 func _process(dt: float) -> void:
+	# Skip menu camera in dedicated server mode
 	if phase == Phase.MENU:
-		menu_orbit += dt * 0.08
-		menu_cam.position = Vector3(cos(menu_orbit) * 55.0, 26.0, sin(menu_orbit) * 55.0)
-		menu_cam.look_at(Vector3(0, 2, 0))
+		if menu_cam:  # Only if camera exists (client mode)
+			menu_orbit += dt * 0.08
+			menu_cam.position = Vector3(cos(menu_orbit) * 55.0, 26.0, sin(menu_orbit) * 55.0)
+			menu_cam.look_at(Vector3(0, 2, 0))
 		return
 	if phase == Phase.COUNTDOWN:
 		countdown -= dt
@@ -1653,7 +1655,8 @@ func _resolve_monitor(code: String, peer_id: int) -> void:
 
 ## Held-join watchdog: reaped on every physics tick (host only).
 func _pending_tick() -> void:
-	if join_alerts != settings.join_alerts:
+	# Skip settings check in dedicated server mode
+	if settings and join_alerts != settings.join_alerts:
 		join_alerts = settings.join_alerts
 	if pending_joins.is_empty():
 		return

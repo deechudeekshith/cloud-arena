@@ -10,7 +10,9 @@ Godot*.zip
 
 # Godot generated files
 .godot/
-godot/.godot/
+godot/.godot/*
+# EXCEPTION: Keep global script class cache for server deployments
+!godot/.godot/global_script_class_cache.cfg
 *.translation
 godot/.import/
 

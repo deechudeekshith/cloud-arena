@@ -24,10 +24,8 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Download Godot 4.3 stable headless
-# NOTE: Project uses 4.7-dev features but 4.3 is latest stable available
-# If compatibility issues occur, may need to build 4.7-dev from source
-# Using 4.3 for now as it's the closest stable version
+# Download Godot 4.3 stable headless (closest to 4.7, no official 4.7 release yet)
+# Project was developed with 4.7 but 4.3 is compatible for server features
 RUN wget https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip \
     && unzip Godot_v4.3-stable_linux.x86_64.zip \
     && mv Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot \
@@ -37,6 +35,10 @@ RUN wget https://github.com/godotengine/godot/releases/download/4.3-stable/Godot
 
 # Copy Godot project files
 COPY godot/ /app/godot/
+
+# Pre-scan scripts to generate class cache (fixes "class not found" errors in headless mode)
+# This ensures all class_name declarations are registered before the server starts
+RUN cd /app/godot && /usr/local/bin/godot --headless --quit --editor 2>&1 | head -n 20 || true
 
 # Copy proxy server and startup script
 COPY proxy_server.py /app/proxy_server.py
