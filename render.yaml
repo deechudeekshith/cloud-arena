@@ -1,0 +1,52 @@
+# Render Blueprint for Cloud Arena
+# Automatically deploys Godot game server to Render free tier
+
+services:
+  # Main game server (Godot headless)
+  - type: web
+    name: cloud-arena-server
+    runtime: docker
+    plan: free
+    region: oregon  # Choose closest region to your players
+    
+    # Health check path (Render pings this to verify service is up)
+    # WebSocket servers accept HTTP connections before upgrade
+    healthCheckPath: /
+    
+    # Environment variables
+    envVars:
+      - key: GODOT_ENVIRONMENT
+        value: production
+      - key: MAX_PLAYERS
+        value: 8
+      - key: LOG_LEVEL
+        value: info
+    
+    # Auto-deploy on push to main branch
+    autoDeploy: true
+    
+    # Build command (Docker handles this)
+    dockerfilePath: ./Dockerfile
+    
+    # Disk for persistent data (optional - Free tier doesn't support this)
+    # disk:
+    #   name: game-data
+    #   mountPath: /app/data
+    #   sizeGB: 1
+
+# Notes for deployment:
+# 1. Connect your GitHub repository to Render
+# 2. Create new Web Service from this blueprint
+# 3. Render will automatically:
+#    - Build Docker image
+#    - Deploy to free tier
+#    - Assign URL: https://cloud-arena-server.onrender.com
+# 4. Update ServerConfig.gd with your Render URL
+# 5. Build new Android APK with production config
+# 
+# Free tier limitations:
+# - Sleeps after 15 minutes of inactivity
+# - Takes ~60 seconds to wake up
+# - 750 free hours per month
+# - 5 GB bandwidth per month (~17 hours of 8-player matches)
+# - No credit card required

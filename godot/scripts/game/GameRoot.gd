@@ -34,14 +34,38 @@ var paused := false
 # rooms (Phase 4: local registry + lobby; net transport lands in Phase 5)
 var room_mgr: RoomManager
 var discovery: RoomDiscovery
+var room_registry: RoomRegistry
 var my_room_code := ""
 var my_pid := ""
 var am_host := false
 
+# Cloud multiplayer configuration
+var server_config: ServerConfig
+
 func _ready() -> void:
+	# Check if running as dedicated server (headless mode)
+	var is_dedicated_server = DisplayServer.get_name() == "headless"
+	
+	if is_dedicated_server:
+		print("[GameRoot] ========================================")
+		print("[GameRoot] CLOUD ARENA - DEDICATED SERVER MODE")
+		print("[GameRoot] ========================================")
+		_start_dedicated_server()
+		return  # Skip client initialization
+	
+	# Normal client initialization
 	InputSetup.ensure()
 	settings = GameSettings.load()
 	settings.apply(get_window())
+	
+	# Initialize cloud server configuration
+	server_config = ServerConfig.new()
+	server_config.name = "ServerConfig"
+	add_child(server_config)
+	server_config.parse_launch_arguments()  # Support --environment=production --server=IP
+	
+	if not server_config.is_production_config_valid():
+		print("[GameRoot] WARNING: " + server_config.get_validation_message())
 	# world containers
 	arena = Node3D.new()
 	arena.name = "Arena"
@@ -102,6 +126,13 @@ func _ready() -> void:
 	discovery = RoomDiscovery.new()
 	discovery.name = "Discovery"
 	add_child(discovery)
+	# Cloud room registry
+	room_registry = RoomRegistry.new()
+	room_registry.name = "RoomRegistry"
+	add_child(room_registry)
+	room_registry.room_registered.connect(_on_room_registered)
+	room_registry.room_lookup_complete.connect(_on_room_lookup_complete)
+	room_registry.registry_error.connect(_on_registry_error)
 	discovery.found_updated.connect(_on_found_updated)
 	perf = PerfHUD.new()
 	add_child(perf)
@@ -118,6 +149,7 @@ func _ready() -> void:
 	monitor = MonitorLink.new()
 	monitor.name = "MonitorLink"
 	monitor.game = self
+	monitor.server_config = server_config  # Pass cloud config
 	add_child(monitor)
 	# stable per-process device identity (model + a run-scoped suffix)
 	device_name = OS.get_name()
@@ -138,6 +170,66 @@ func _ready() -> void:
 	add_child(menu_cam)
 	_apply_quality()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+## Dedicated server mode - runs headless, accepts connections, manages rooms
+func _start_dedicated_server() -> void:
+	print("[GameRoot] Starting dedicated server...")
+	
+	# Minimal initialization for server
+	arena = Node3D.new()
+	arena.name = "Arena"
+	add_child(arena)
+	
+	fighters = Node3D.new()
+	fighters.name = "Fighters"
+	add_child(fighters)
+	
+	fx = Node3D.new()
+	fx.name = "FX"
+	add_child(fx)
+	
+	# Room management
+	room_mgr = RoomManager.new()
+	room_mgr.name = "RoomManager"
+	add_child(room_mgr)
+	room_mgr.lobby_changed.connect(_on_lobby_changed)
+	
+	# Network transport
+	_ensure_net()
+	
+	# Read port from environment (Render sets PORT)
+	var server_port = 10000  # Default Render port
+	var env_port = OS.get_environment("PORT")
+	if env_port != "":
+		server_port = int(env_port)
+		print("[GameRoot] Using PORT from environment: %d" % server_port)
+	
+	# Start hosting WebSocket server
+	print("[GameRoot] Binding to 0.0.0.0:%d..." % server_port)
+	if not net.host(server_port):
+		push_error("[GameRoot] FAILED to bind to port %d!" % server_port)
+		get_tree().quit(1)
+		return
+	
+	am_host = true
+	net_mode = "host"
+	
+	print("[GameRoot] ========================================")
+	print("[GameRoot] Server started successfully!")
+	print("[GameRoot] Listening on 0.0.0.0:%d" % server_port)
+	print("[GameRoot] Ready to accept client connections")
+	print("[GameRoot] Max players per room: %d" % RoomManager.MAX_PLAYERS)
+	print("[GameRoot] ========================================")
+	print("[GameRoot] WebSocket server accepts both WS and HTTP connections")
+	print("[GameRoot] Health check endpoint: http://localhost:%d/ (any HTTP request)" % server_port)
+	
+	# NOTE: Godot WebSocketMultiplayerPeer automatically handles HTTP upgrade requests
+	# Render's health check will send HTTP GET, which WebSocket server accepts
+	# No separate HTTP server needed - WebSocket server handles both protocols
+	
+	print("[GameRoot] Server running... (Ctrl+C to stop)")
+
+
 
 func _apply_quality() -> void:
 	var q := settings.quality
@@ -380,13 +472,33 @@ func _on_create_room() -> void:
 		return
 	my_room_code = str(room["code"])
 	my_pid = str(room["host_pid"])
-	am_host = true
-	_ensure_net()
-	if not net.host(GAME_PORT):
-		menus.lobby_message("Could not open port %d (another host running?)" % GAME_PORT)
-	discovery.start_hosting(my_room_code, GAME_PORT, settings.player_name,
-		1, RoomManager.MAX_PLAYERS)
-	menus.show_lobby(room, my_pid, true)
+	
+	# In production mode, connect to cloud server instead of hosting locally
+	if server_config and server_config.is_production():
+		am_host = false
+		# Set registry URL (same as game server, uses /registry/* path)
+		var registry_url = "https://%s" % server_config.config.game_server.host
+		if not server_config.config.game_server.use_wss:
+			registry_url = "http://%s" % server_config.config.game_server.host
+		room_registry.set_registry_url(registry_url)
+		
+		# Register room on cloud registry
+		var cloud_host = server_config.config.game_server.host
+		var cloud_port = server_config.config.game_server.port
+		room_registry.register_room(my_room_code, cloud_host, cloud_port, 
+		                             settings.player_name, RoomManager.MAX_PLAYERS, 1)
+		
+		# Connect to cloud game server
+		_start_net_join(cloud_host, cloud_port, my_room_code)
+	else:
+		# Development mode: local hosting
+		am_host = true
+		_ensure_net()
+		if not net.host(GAME_PORT):
+			menus.lobby_message("Could not open port %d (another host running?)" % GAME_PORT)
+		discovery.start_hosting(my_room_code, GAME_PORT, settings.player_name,
+			1, RoomManager.MAX_PLAYERS)
+		menus.show_lobby(room, my_pid, true)
 	_monitor_event("ROOM_CREATED", {
 		"room_code": my_room_code,
 		"room_id": str(room.get("room_id", "")),
@@ -395,6 +507,7 @@ func _on_create_room() -> void:
 		"host_device": device_id, "host_name": settings.player_name})
 
 func _on_join_code(code: String) -> void:
+	# First try local room (same device)
 	var res := room_mgr.join_room(code, settings.player_name, settings.avatar_id)
 	if bool(res.get("ok", false)):
 		my_room_code = code
@@ -402,6 +515,19 @@ func _on_join_code(code: String) -> void:
 		am_host = false
 		menus.show_lobby(res["room"], my_pid, false)
 		return
+	
+	# Not found locally - check if in production mode
+	if server_config and server_config.is_production():
+		# Query cloud registry
+		var registry_url = "https://%s" % server_config.config.game_server.host
+		if not server_config.config.game_server.use_wss:
+			registry_url = "http://%s" % server_config.config.game_server.host
+		room_registry.set_registry_url(registry_url)
+		room_registry.lookup_room(code)
+		menus.join_error_message("Looking up room %s..." % code)
+		return
+	
+	# Development mode: check LAN discovery
 	var err := str(res.get("error", "Room not found"))
 	if err == "Room not found" and discovery.found.has(code):
 		# same-process miss but LAN-visible: join over the network
@@ -1034,6 +1160,16 @@ func _ensure_net() -> NetTransport:
 		net = NetTransport.new()
 		net.name = "NetTransport"
 		add_child(net)
+		
+		# Apply ServerConfig settings for connection behavior
+		if server_config:
+			net.max_connection_attempts = server_config.config.game_server.get("reconnect_attempts", 3)
+			net.retry_delay = server_config.config.game_server.get("reconnect_delay", 2.0)
+		
+		# Connect cloud multiplayer signals
+		net.connection_failed.connect(_on_net_connection_failed)
+		net.connection_retrying.connect(_on_net_connection_retrying)
+		
 		net.peer_joined.connect(_on_net_peer_joined)
 		net.peer_left.connect(_on_net_peer_left)
 		net.hello_received.connect(_on_net_hello)
@@ -1943,6 +2079,16 @@ func _on_net_welcome(info: Dictionary) -> void:
 func _on_net_starting(info: Dictionary) -> void:
 	start_net_client(info)
 
+# Cloud multiplayer connection handlers
+func _on_net_connection_failed(reason: String) -> void:
+	print("[GameRoot] Cloud connection failed: %s" % reason)
+	menus.join_error_message("Could not connect to server: %s" % reason)
+	_leave_room_silent()
+
+func _on_net_connection_retrying(attempt: int, max_attempts: int) -> void:
+	print("[GameRoot] Retrying connection... attempt %d/%d" % [attempt, max_attempts])
+	menus.lobby_message("Connecting to server... (attempt %d/%d)" % [attempt, max_attempts])
+
 func _client_match_over(ev: Dictionary) -> void:
 	phase = Phase.GAMEOVER
 	if player:
@@ -1997,3 +2143,29 @@ func _start_net_join(ip: String, port: int, code: String) -> void:
 
 var _pending_hello := false
 
+
+
+# ---------------- Room Registry callbacks ----------------
+func _on_room_registered(code: String, success: bool) -> void:
+	if success:
+		print("[GameRoot] Room %s registered on cloud" % code)
+		# Show lobby after successful registration
+		var room := room_mgr.get_room(code)
+		if not room.is_empty():
+			menus.show_lobby(room, my_pid, false)
+			menus.lobby_message("Room registered! Share code %s with friends" % code)
+	else:
+		menus.lobby_message("Failed to register room on cloud server")
+
+func _on_room_lookup_complete(code: String, found: bool, host_data: Dictionary) -> void:
+	if found:
+		var host := str(host_data.get("host", ""))
+		var port := int(host_data.get("port", 10000))
+		print("[GameRoot] Room %s found at %s:%d" % [code, host, port])
+		_start_net_join(host, port, code)
+	else:
+		menus.join_error_message("Room %s not found" % code)
+
+func _on_registry_error(error: String) -> void:
+	push_error("[GameRoot] Registry error: %s" % error)
+	menus.lobby_message("Cloud registry error: %s" % error)

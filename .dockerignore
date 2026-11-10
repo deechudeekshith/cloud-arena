@@ -1,0 +1,70 @@
+# .dockerignore for Cloud Arena Docker image
+# Excludes unnecessary files from Docker build context
+
+# Git
+.git
+.gitignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Build artifacts
+build/
+dist/
+*.apk
+*.aab
+
+# Deployment scripts (not needed in container)
+deploy/
+
+# Monitor service (separate service, not needed in game server)
+monitor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Godot editor files (we only need runtime files)
+godot/.godot/editor/
+godot/.import/
+godot/export_presets.cfg
+
+# Temporary files
+godot/.room_*.txt
+
+# Test files
+**/test_*.gd
+**/tests/
+
+# CMake build files (C++ components if any)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Logs
+*.log
+
+# Environment files (secrets should use Render env vars)
+.env
+.env.*
+
+# APK files (client builds, not server)
+*.apk
+*.aab
+
+# Python cache (if monitor was included)
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules (if any web components)
+node_modules/

@@ -1093,6 +1093,12 @@ async def live():
     return state.live_payload()
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint for monitoring."""
+    return {"status": "ok", "service": "CloudArena Monitor", "timestamp": time.time()}
+
+
 @app.get("/api/rooms")
 async def rooms():
     """Active rooms + their open session summary (room-centric dashboard)."""

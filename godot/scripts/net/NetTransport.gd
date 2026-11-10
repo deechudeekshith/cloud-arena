@@ -7,6 +7,11 @@ extends Node
 ## Channels: unreliable = input/snapshot/ping (20Hz+); reliable = hello,
 ## welcome, fire, pickup, lobby, events. Loss is MEASURED from sequence
 ## gaps on the unreliable streams. RTT is MEASURED with ping/pong echo.
+##
+## CLOUD MULTIPLAYER: Supports both local development (LAN) and production
+## (cloud server) modes. Uses ServerConfig for environment-based configuration.
+## WebSocket transport works for both native (PC/Android) and web clients.
+## Includes connection retry logic and better error handling for cloud connections.
 
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
@@ -22,6 +27,16 @@ signal welcome_received(info: Dictionary)
 signal starting_received(info: Dictionary)
 signal shot_received(shot: Dictionary)
 signal rtt_updated(peer_id: int, rtt_ms: float)
+signal connection_failed(reason: String)
+signal connection_retrying(attempt: int, max_attempts: int)
+
+# Cloud connection management
+var connection_attempt := 0
+var max_connection_attempts := 3
+var retry_delay := 2.0
+var retry_timer := 0.0
+var pending_connection := false
+var pending_connection_data := {}  # {ip, port}
 
 const PROTO := 1
 
@@ -68,8 +83,20 @@ func close() -> void:
 	if multiplayer.multiplayer_peer is MultiplayerPeer:
 		multiplayer.multiplayer_peer = null
 
-func host(port: int) -> bool:
+func host(port: int = -1) -> bool:
 	close()
+	# If port not specified or -1, read from environment (Render deployment)
+	if port <= 0:
+		var env_port = OS.get_environment("PORT")
+		if env_port != "":
+			port = int(env_port)
+			print("[NetTransport] Using PORT from environment: %d" % port)
+		else:
+			port = 10000  # Default for Render if PORT not set
+			print("[NetTransport] Using default port: %d" % port)
+	
+	print("[NetTransport] Hosting on 0.0.0.0:%d" % port)
+	
 	if transport == Transport.WEBSOCKET:
 		var ws := WebSocketMultiplayerPeer.new()
 		if ws.create_server(port) != OK:
@@ -89,28 +116,73 @@ func host(port: int) -> bool:
 
 func join(ip: String, port: int) -> bool:
 	close()
+	connection_attempt = 0
+	pending_connection = false
+	
 	# Remembered so other subsystems (notably MonitorLink) can reach services
 	# on the same machine we are joining, e.g. a phone reporting telemetry to
 	# the PC that is hosting the room.
 	remote_addr = ip
+	
+	return _attempt_join(ip, port)
+
+func _attempt_join(ip: String, port: int) -> bool:
+	connection_attempt += 1
+	
+	print("[NetTransport] Connection attempt %d/%d to %s:%d" % [connection_attempt, max_connection_attempts, ip, port])
+	
 	if transport == Transport.WEBSOCKET:
 		var url := ip
+		# Handle WebSocket URL properly (ws:// or wss://)
 		if not (url.begins_with("ws://") or url.begins_with("wss://")):
-			url = "ws://%s:%d" % [ip, port]
+			# Detect Render.com URLs or HTTPS port to use WSS
+			var use_secure = (port == 443 or url.contains(".onrender.com") or url.contains("https"))
+			var protocol = "wss" if use_secure else "ws"
+			url = "%s://%s:%d" % [protocol, ip, port]
+		
+		print("[NetTransport] Connecting to WebSocket URL: %s" % url)
+		
 		var ws := WebSocketMultiplayerPeer.new()
-		if ws.create_client(url) != OK:
+		var err = ws.create_client(url)
+		if err != OK:
+			print("[NetTransport] ERROR: Failed to create WebSocket client: %d" % err)
+			_handle_connection_failure(ip, port, "Failed to create WebSocket client (error %d)" % err)
 			return false
 		peer = ws
 	else:
+		# ENet transport (legacy LAN-only)
 		var enet := ENetMultiplayerPeer.new()
-		if enet.create_client(ip, port) != OK:
+		var err = enet.create_client(ip, port)
+		if err != OK:
+			print("[NetTransport] ERROR: Failed to create ENet client: %d" % err)
+			_handle_connection_failure(ip, port, "Failed to create ENet client (error %d)" % err)
 			return false
 		peer = enet
+	
 	is_host = false
 	multiplayer.multiplayer_peer = peer
 	peer.peer_connected.connect(_on_server_connected)
 	peer.peer_disconnected.connect(_on_server_gone)
+	
+	# Store connection data for retry
+	pending_connection = true
+	pending_connection_data = {"ip": ip, "port": port}
+	
 	return true
+
+func _handle_connection_failure(ip: String, port: int, reason: String) -> void:
+	print("[NetTransport] Connection failed: %s" % reason)
+	
+	if connection_attempt < max_connection_attempts:
+		print("[NetTransport] Will retry in %.1f seconds..." % retry_delay)
+		connection_retrying.emit(connection_attempt, max_connection_attempts)
+		pending_connection = true
+		pending_connection_data = {"ip": ip, "port": port}
+		retry_timer = retry_delay
+	else:
+		print("[NetTransport] Max connection attempts reached. Giving up.")
+		connection_failed.emit(reason)
+		pending_connection = false
 
 func _on_peer_connected(id: int) -> void:
 	peer_joined.emit(id)
@@ -290,12 +362,25 @@ func send_ping(peer_id: int) -> void:
 			rpc_id(1, "_net_ping", d)
 
 func _process(dt: float) -> void:
+	# Handle connection retry timer
+	if pending_connection and retry_timer > 0.0:
+		retry_timer -= dt
+		if retry_timer <= 0.0:
+			retry_timer = 0.0
+			var ip = pending_connection_data.get("ip", "")
+			var port = pending_connection_data.get("port", 7777)
+			if ip != "":
+				_attempt_join(ip, port)
+	
 	if peer == null:
 		return
 	# WebSocketMultiplayerPeer does not emit peer_connected on the CLIENT
 	# side (unlike ENet), so derive the connected flag from the peer status.
 	if not connected and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		connected = true
+		pending_connection = false
+		connection_attempt = 0
+		print("[NetTransport] Successfully connected!")
 		if not is_host:
 			_on_server_connected(multiplayer.get_unique_id())
 	if not connected:

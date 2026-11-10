@@ -6,10 +6,15 @@ extends Node
 ## localhost (separate from game traffic; own byte counters so monitoring
 ## overhead is measured independently and never mixed into game bandwidth).
 ## All failures are silent + retried: the game runs fine with no service.
+##
+## CLOUD MULTIPLAYER: Uses ServerConfig for automatic endpoint configuration.
+## In development mode, connects to localhost:8901. In production mode,
+## connects to cloud VPS monitor API (HTTPS).
 
 signal command_result(cmd_id: String, ok: bool, detail: String)
 
 var game: Node = null # GameRoot
+var server_config: ServerConfig = null  # Set by GameRoot
 var base_url := "http://127.0.0.1:8901"
 # Stable device identity (set by GameRoot): lets the monitor group telemetry
 # per physical device instead of a single anonymous game stream.
@@ -41,26 +46,39 @@ var _polling := false
 
 ## Work out where the monitor service actually lives.
 ##
-## Hardcoding loopback means a phone streams its telemetry to ITSELF and the
-## dashboard never sees a second device, so the URL is resolved instead:
-##   1. explicit override (CLI/config) always wins
-##   2. CLOUD_ARENA_MONITOR environment variable
-##   3. the room host we actually connected to (the monitor runs on the same
+## CLOUD MULTIPLAYER: Priority order:
+##   1. ServerConfig (production cloud endpoint or development localhost)
+##   2. explicit override (CLI/config) always wins
+##   3. CLOUD_ARENA_MONITOR environment variable
+##   4. the room host we actually connected to (the monitor runs on the same
 ##      PC as the host, one port over from the game)
-##   4. loopback, for single-machine desktop runs
+##   5. loopback, for single-machine desktop runs
 func resolve_base_url(override: String = "", game_host: String = "") -> String:
+	# Priority 1: Use ServerConfig if available
+	if server_config != null:
+		base_url = server_config.get_monitor_url()
+		print("[MonitorLink] Using ServerConfig endpoint: %s" % base_url)
+		return base_url
+	
+	# Priority 2: Explicit override
 	var o := override.strip_edges()
 	if o != "":
 		base_url = o
 		return base_url
+	
+	# Priority 3: Environment variable
 	var env := OS.get_environment("CLOUD_ARENA_MONITOR").strip_edges()
 	if env != "":
 		base_url = env
 		return base_url
+	
+	# Priority 4: Game host (LAN/cloud server)
 	var h := host_only(game_host)
 	if h != "" and h != "127.0.0.1" and h != "localhost" and h != "0.0.0.0":
 		base_url = "http://%s:%d" % [h, port]
 		return base_url
+	
+	# Priority 5: Localhost fallback
 	base_url = "http://127.0.0.1:%d" % port
 	return base_url
 

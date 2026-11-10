@@ -1,0 +1,135 @@
+# ========================================
+# Cloud Arena - Production .gitignore
+# ========================================
+
+# === Godot Editor ===
+# Godot executable (Windows development)
+Godot_v4.7-stable_win64.exe/
+Godot*.exe
+Godot*.zip
+
+# Godot generated files
+.godot/
+godot/.godot/
+*.translation
+godot/.import/
+
+# Godot import files (auto-generated)
+*.import
+
+# === Build Artifacts ===
+# Android APKs and build outputs
+build/
+dist/
+*.apk
+*.apk.idsig
+*.aab
+
+# CMake build files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# === Environment Files ===
+.env
+.env.local
+.env.*.local
+*.env
+
+# === Monitor/Telemetry Server ===
+# Database files
+monitor/*.db
+monitor/*.db-journal
+monitor/*.db-wal
+monitor/*.db-shm
+*.sqlite
+*.sqlite3
+
+# Logs and experiment data
+monitor/run_exp*.log
+monitor/room_exp*.txt
+*.log
+logs/
+
+# Room debug files
+godot/.room_*.txt
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.freebuff/
+
+# === Documentation (Historical Reports) ===
+# Exclude historical build reports and redundant docs
+CHATGPT_FINAL_HANDOVER.md
+CLOUD_MULTIPLAYER_FINAL_CHECK.md
+CLOUD_MULTIPLAYER_IMPLEMENTATION_COMPLETE.md
+COMPLETE_PROJECT_AUDIT_AND_IMPLEMENTATION_PLAN.md
+EXPORT_PRESET_FIX_REPORT.md
+FINAL_BUILD_REPORT.md
+FINAL_DELIVERY_REPORT.md
+FINAL_SUMMARY.txt
+GLOBAL_INTERNET_MULTIPLAYER_AUDIT.md
+GODOT_4.7_FIX_REPORT.md
+IMPLEMENTATION_COMPLETE.md
+MOBILE_TEST_INSTRUCTIONS.md
+MULTIPLAYER_ALREADY_IMPLEMENTED_REPORT.md
+MULTIPLAYER_TESTING_GUIDE.md
+PROJECT_CLEANUP_PLAN.md
+PROJECT_COMPLETION_REPORT.md
+RENDER_COMPATIBILITY_ANALYSIS.md
+TECHNICAL_VALIDATION_REPORT.md
+VPS_SETUP_REQUIRED.md
+BUILD_APK_INSTRUCTIONS.md
+
+# Keep these essential docs (negation rules)
+!README.md
+!QUICK_START.md
+!START_HERE.md
+!QUICKSTART_CLOUD_MULTIPLAYER.md
+!README_CLOUD_DEPLOYMENT.md
+!RENDER_DEPLOYMENT_GUIDE.md
+
+# === Operating System ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# === Android ===
+# Local Android SDK configuration
+local.properties
+gradle.properties
+
+# === Temporary Files ===
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# === Auto-generated scripts ===
+AUTO_BUILD_APK.ps1
