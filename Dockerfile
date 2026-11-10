@@ -24,14 +24,13 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Download Godot 4.3 stable headless (closest to 4.7, no official 4.7 release yet)
-# Project was developed with 4.7 but 4.3 is compatible for server features
-RUN wget https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip \
-    && unzip Godot_v4.3-stable_linux.x86_64.zip \
-    && mv Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot \
+# Download Godot 4.7 stable headless (matches project version)
+RUN wget https://github.com/godotengine/godot/releases/download/4.7-stable/Godot_v4.7-stable_linux.x86_64.zip \
+    && unzip Godot_v4.7-stable_linux.x86_64.zip \
+    && mv Godot_v4.7-stable_linux.x86_64 /usr/local/bin/godot \
     && chmod +x /usr/local/bin/godot \
-    && rm Godot_v4.3-stable_linux.x86_64.zip \
-    && godot --version || echo "Godot 4.3 installed"
+    && rm Godot_v4.7-stable_linux.x86_64.zip \
+    && godot --version || echo "Godot 4.7 installed"
 
 # Copy Godot project files
 COPY godot/ /app/godot/

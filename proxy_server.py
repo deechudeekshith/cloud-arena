@@ -96,42 +96,66 @@ class ProxyHandler(BaseHTTPRequestHandler):
     def _proxy_websocket(self):
         """Proxy WebSocket connection to Godot server"""
         try:
+            # Build a proper WebSocket upgrade request to forward to Godot
+            from hashlib import sha1
+            from base64 import b64encode
+            
+            # Extract the Sec-WebSocket-Key from client request
+            ws_key = self.headers.get('Sec-WebSocket-Key', '')
+            if not ws_key:
+                self.send_error(400, "Missing Sec-WebSocket-Key header")
+                return
+            
             # Connect to Godot server
             godot_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             godot_sock.connect(('127.0.0.1', GODOT_PORT))
             
-            # Forward the HTTP upgrade request
-            request_line = f"{self.command} {self.path} {self.request_version}\r\n"
-            godot_sock.sendall(request_line.encode())
+            # Send upgrade request to Godot (include all required WebSocket headers)
+            request = f"GET {self.path} HTTP/1.1\r\n"
+            request += "Host: localhost:10001\r\n"
+            request += "Upgrade: websocket\r\n"
+            request += "Connection: Upgrade\r\n"
+            request += f"Sec-WebSocket-Key: {ws_key}\r\n"
+            request += "Sec-WebSocket-Version: 13\r\n"
+            request += "\r\n"
             
-            # Forward headers
-            for header, value in self.headers.items():
-                godot_sock.sendall(f"{header}: {value}\r\n".encode())
-            godot_sock.sendall(b"\r\n")
+            godot_sock.sendall(request.encode())
             
-            # Get response from Godot
-            response = b""
-            while True:
-                chunk = godot_sock.recv(4096)
+            # Read the complete response (headers + empty line)
+            response_data = b""
+            while b"\r\n\r\n" not in response_data:
+                chunk = godot_sock.recv(1024)
                 if not chunk:
-                    break
-                response += chunk
-                if b"\r\n\r\n" in response:
-                    break
+                    print("[PROXY] ERROR: Godot server closed connection during handshake")
+                    self.send_error(502, "Bad Gateway")
+                    return
+                response_data += chunk
             
-            # Send response to client
-            self.wfile.write(response)
+            # Parse Godot's response
+            response_str = response_data.decode('utf-8', errors='ignore')
+            headers_part = response_str.split('\r\n\r\n')[0]
             
-            # Now proxy bidirectional traffic
-            client_sock = self.connection
-            self._bidirectional_proxy(client_sock, godot_sock)
+            # Send response to client with proper WebSocket upgrade headers
+            self.send_response(101)
+            self.send_header('Upgrade', 'websocket')
+            self.send_header('Connection', 'Upgrade')
+            
+            # Generate the Sec-WebSocket-Accept from the key
+            magic_string = ws_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+            sha1_hash = sha1(magic_string.encode()).digest()
+            ws_accept = b64encode(sha1_hash).decode('ascii')
+            self.send_header('Sec-WebSocket-Accept', ws_accept)
+            self.end_headers()
+            
+            # Now bidirectionally proxy the WebSocket frames
+            self._bidirectional_proxy(self.connection, godot_sock)
             
         except Exception as e:
             print(f"[PROXY] WebSocket proxy error: {e}")
             self.send_error(502, "Bad Gateway")
     
     def _bidirectional_proxy(self, client, server):
-        """Proxy traffic between client and server"""
+        """Proxy WebSocket frames between client and server"""
         try:
             while True:
                 readable, _, exceptional = select.select([client, server], [], [client, server], 1.0)
@@ -149,7 +173,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     else:
                         client.sendall(data)
         except Exception as e:
-            print(f"[PROXY] Bidirectional proxy error: {e}")
+            print(f"[PROXY] Bidirectional proxy ended: {e}")
     
     def _handle_room_lookup(self, code):
         """Look up room by code"""
